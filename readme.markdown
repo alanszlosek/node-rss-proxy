@@ -1,0 +1,26 @@
+Node RSS Proxy
+----
+
+Node RSS Proxy is a node.js service I used to proxy and cache RSS feeds for podcasts I listen to. The overall goal is to speed up feed fetching, especially over cellular data.
+
+Features:
+
+* Reduces size of a podcast feed by omitting unnecessary XML elements
+* Only returns new feed items (since podcast client's last fetch)
+
+Requirements:
+
+* node.js
+* NPM modules: mysql, parse-rss, entities
+
+Installation and Usage:
+
+* npm install mysql parse-rss entities
+* Create a mysql database
+* Use setup.mysql to create tables
+* Copy config-example.js to config.js and update with your database credentials and desired secret folder prefix
+* Start the service on port 10000 via: node ./index.js 10000
+* When adding feeds to your podcast client, prepend feed URL with: http://YOURDOMAIN.com/FOLDERSECRET-CLIENTNAME/
+  * FOLDERSECRET is a secret folder prefix of your choosing, to keep others from using your proxy.
+  * CLIENTNAME is to differentiate devices/podcast-clients
+

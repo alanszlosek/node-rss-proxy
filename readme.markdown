@@ -1,12 +1,13 @@
 Node RSS Proxy
 ----
 
-Node RSS Proxy is a node.js service I used to proxy and cache RSS feeds for podcasts I listen to. The overall goal is to speed up feed fetching, especially over cellular data.
+Node RSS Proxy is a node.js service I use to proxy and cache podcast RSS feeds.
 
 Features:
 
 * Reduces size of a podcast feed by omitting unnecessary XML elements
-* Only returns new feed items (since podcast client's last fetch)
+* Reduces the number of servers my phone has to contact when fetching feeds
+* Returns only the new feed items (since podcast client's last fetch)
 
 Requirements:
 

@@ -1,13 +1,9 @@
-var config = require('../config.js'),
+var parser = require('parse-rss'),
     mysql = require('mysql'),
-    parser = require('parse-rss'),
-    x = require('./xml.js'),
-    //seq = require('./seq.js'),
-    db = mysql.createConnection(config.db);
-db.connect();
+    x = require('./xml.js');
 
 module.exports = {
-    createOrFetch: function(feed_url, client, callback) {
+    createOrFetch: function(db, feed_url, client, callback) {
         var self = this;
         var feed;
         // We're going to exclude client access times within the last 10 minutes ...
@@ -22,7 +18,7 @@ module.exports = {
             if (rows.length == 0) {
                 console.log('Have not seen this feed before, fetching+creating anew');
                 // Not found, so create and fetch it
-                self.fetch(feed_url, function(error) {
+                self.fetch(db, feed_url, function(error) {
                     if (error) {
                         callback(error);
                         return;
@@ -43,7 +39,7 @@ module.exports = {
                 feed = rows[0];
                 if (feed.last_fetched_timestamp < ((new Date()).getTime() - 21600000)) {
                     console.log('Have not fetched in a while, refreshing ...');
-                    self.fetch(feed_url, function(error, feed) {
+                    self.fetch(db, feed_url, function(error, feed) {
                         if (error) {
                             return callback(error);
                         }
@@ -56,7 +52,7 @@ module.exports = {
             }
         });
     },
-    fetch: function(feed_url, callback) {
+    fetch: function(db, feed_url, callback) {
         parser(feed_url, function(err, rss) {
             if (err) {
                 callback(err);
@@ -126,7 +122,7 @@ module.exports = {
         });
     },
 
-    feedXML: function(feed, since, callback) {
+    feedXML: function(db, feed, since, callback) {
         db.query('SELECT * FROM items WHERE feed_id=? AND `timestamp`>? ORDER BY `timestamp` DESC', [feed.id, since], function(err, rows) {
             if (err) {
                 callback(err);

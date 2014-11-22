@@ -38,14 +38,7 @@ var server = http.createServer(function (req, res) {
             if (!feed.last_access_timestamp) {
                 feed.last_access_timestamp = 0;
             }
-            // Update access time
-            var data = {
-                name: client,
-                feed_id: feed.id,
-                last_access_timestamp: (new Date()).getTime()
-            };
-            db.query('REPLACE INTO clients SET ' + mysql.escape(data));
-
+    
             proxy.feedXML(db, feed, feed.last_access_timestamp, function(error, xml) {
                 console.log('Releasing connection');
                 db.release();

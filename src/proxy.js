@@ -30,7 +30,9 @@ module.exports = {
                             callback(err);
                             return;
                         }
-                        callback(null, rows[0]);
+                        feed = rows[0];
+                        self.updateClientAccessTime(db, feed, client);
+                        callback(null, feed);
                     });
                 });
             } else {
@@ -43,10 +45,12 @@ module.exports = {
                         if (error) {
                             return callback(error);
                         }
+                        self.updateClientAccessTime(db, feed, client);
                         callback(null, feed);
                     });
                 } else {
                     console.log('Has not been long enough. Using cached version');
+                    self.updateClientAccessTime(db, feed, client);
                     callback(null, rows[0]);
                 }
             }
@@ -153,5 +157,16 @@ module.exports = {
             callback(false, channel.toString('rss'));
         });
     },
+
+    updateClientAccessTime: function(db, feed, client) {
+        // Update access time
+        var data = {
+            name: client,
+            feed_id: feed.id,
+            last_access_timestamp: (new Date()).getTime()
+        };
+        db.query('REPLACE INTO clients SET ' + mysql.escape(data));
+    }
+
 };
 

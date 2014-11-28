@@ -57,6 +57,8 @@ module.exports = {
         });
     },
     fetch: function(db, feed_url, callback) {
+        // Would love to get the size of the feed somehow, but I don't think we can
+        // with this feedparser wrapper
         parser(feed_url, function(err, rss) {
             if (err) {
                 callback(err);
@@ -140,6 +142,7 @@ module.exports = {
                 ),
                 x('itunes:image').attribute('href', feed.feed_image_url)
             );
+            var xml;
             for (var i = 0; i < rows.length; i++) {
                 var row = rows[i];
                 var date = new Date(row.timestamp);
@@ -154,7 +157,9 @@ module.exports = {
                     )
                 );
             }
-            callback(false, channel.toString('rss'));
+            xml = channel.toString('rss');
+            console.log('Output XML size: ' + xml.length);
+            callback(false, xml);
         });
     },
 

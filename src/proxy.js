@@ -1,4 +1,5 @@
-var parser = require('parse-rss'),
+var request = require('request'),
+    FeedParser = require('feedparser'),
     mysql = require('mysql'),
     x = require('./xml.js');
 
@@ -9,8 +10,8 @@ module.exports = {
         // We're going to exclude client access times within the last 10 minutes ...
         // Repeat accesses probably mean we should return the whole feed,
         // maybe something went screwy and someone's hitting refresh
-        var padding = (new Date()).getTime();
-        db.query('SELECT feeds.*,clients.last_access_timestamp FROM feeds LEFT JOIN clients on (feeds.id=clients.feed_id AND clients.name=? AND clients.last_access_timestamp < ?) WHERE feed_url=?', [client, (padding-360000), feed_url], function(err, rows) {
+        var padding = (new Date()).getTime() - 60000;
+        db.query('SELECT feeds.*,clients.last_access_timestamp FROM feeds LEFT JOIN clients on (feeds.id=clients.feed_id AND clients.name=? AND clients.last_access_timestamp < ?) WHERE feed_url=?', [client, padding, feed_url], function(err, rows) {
             if (err) {
                 callback(err);
                 return;
@@ -31,6 +32,7 @@ module.exports = {
                             return;
                         }
                         feed = rows[0];
+                        feed.last_access_timestamp = 0;
                         self.updateClientAccessTime(db, feed, client);
                         callback(null, feed);
                     });
@@ -39,6 +41,9 @@ module.exports = {
                 console.log('Familiar with this feed');
                 // Has it been a while? If so, fetch again
                 feed = rows[0];
+                if (!feed.last_access_timestamp) {
+                    feed.last_access_timestamp = 0;
+                }
                 if (feed.last_fetched_timestamp < ((new Date()).getTime() - 21600000)) {
                     console.log('Have not fetched in a while, refreshing ...');
                     self.fetch(db, feed_url, function(error, feed) {
@@ -51,66 +56,90 @@ module.exports = {
                 } else {
                     console.log('Has not been long enough. Using cached version');
                     self.updateClientAccessTime(db, feed, client);
-                    callback(null, rows[0]);
+                    callback(null, feed);
                 }
             }
         });
     },
     fetch: function(db, feed_url, callback) {
-        // Would love to get the size of the feed somehow, but I don't think we can
-        // with this feedparser wrapper
-        parser(feed_url, function(err, rss) {
-            if (err) {
-                callback(err);
-                return;
-            }
-            if (rss.length == 0) {
-                callback('Feed has no items (' + feed_url + ')');
-                return;
-            }
-            var data = {
-                feed_url: feed_url,
-                title: rss[0].meta.title,
-                website: rss[0].meta.link,
-                description: rss[0].meta.description,
-                feed_image_url: rss[0].meta.image.url,
-                last_fetched_timestamp: (new Date()).getTime(),
-                last_updated_timestamp: (new Date(rss[0].meta.date)).getTime()
-            };
+        var req = request(feed_url, {timeout: 10000, pool: false}),
+            feedparser = new FeedParser({addmeta:false}),
+            items = [];
+        //req.setMaxListeners(50);
+        // Some feeds do not respond without user-agent and accept headers.
+        req.setHeader('user-agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1650.63 Safari/537.36');
+        req.setHeader('accept', 'text/html,application/xhtml+xml');
 
-            var sequential = function(feed_id, rows, callback) {
-                var work = function() {
-                    var item,
-                        data;
-                    if (rows.length == 0) {
-                        return callback(null);
-                    }
-                    item = rows.pop();
-                    // No audio file, skip it
-                    if (!item.enclosures || item.enclosures.length == 0) {
-                        return work();
-                    }
-                    data = {
-                        feed_id: feed_id,
-                        guid: item.guid,
-                        title: item.title,
-                        description: item.description,
-                        timestamp: (new Date(item.pubdate)).getTime(),
-                        item_url: item.link,
-                        audio_url: item.enclosures[0].url,
-                        audio_mimetype: item.enclosures[0].type,
-                        audio_length: item.enclosures[0]['length'] || 0
-                    };
-                    db.query('REPLACE INTO items SET ' + mysql.escape(data), function(error, result) {
-                        if (error) {
-                            return callback(error);
-                        }
-                        work();
-                    });
+
+        // Define our handlers
+        req.on('error', callback);
+        req.on('response', function(res) {
+            var bytes = 0;
+            if (res.statusCode != 200) {
+                return this.emit('error', new Error('Bad status code'));
+            }
+            res.on('data', function(data) {
+                bytes += data.length;
+            });
+            res.on('end', function() {
+                console.log('Feed size in bytes: ' + bytes);
+            });
+            res.pipe(feedparser);
+            // Can we get content length from res?
+        });
+
+        var sequential = function(feed_id, rows, callback) {
+            var work = function() {
+                var item,
+                    data;
+                if (rows.length == 0) {
+                    return callback(null);
+                }
+                item = rows.pop();
+                // No audio file, skip it
+                if (!item.enclosures || item.enclosures.length == 0) {
+                    return work();
+                }
+                data = {
+                    feed_id: feed_id,
+                    guid: item.guid,
+                    title: item.title,
+                    description: item.description,
+                    timestamp: (new Date(item.pubdate)).getTime(),
+                    item_url: item.link,
+                    audio_url: item.enclosures[0].url,
+                    audio_mimetype: item.enclosures[0].type,
+                    audio_length: item.enclosures[0]['length'] || 0
                 };
-                work();
+                db.query('REPLACE INTO items SET ' + mysql.escape(data), function(error, result) {
+                    if (error) {
+                        return callback(error);
+                    }
+                    work();
+                });
             };
+            work();
+        };
 
+        feedparser.on('error', callback);
+        feedparser.on('readable', function() {
+            var item;
+            while (item = this.read()) {
+                items.push(item);
+            }
+        });
+        feedparser.on('end', function() {
+            var data = {
+                    feed_url: feed_url,
+                    title: this.meta.title,
+                    website: this.meta.link,
+                    description: this.meta.description,
+                    feed_image_url: this.meta.image.url,
+                    last_fetched_timestamp: (new Date()).getTime(),
+                    last_updated_timestamp: (new Date(this.meta.date)).getTime()
+                };
+
+            console.log('Feed has ' + items.length + ' items');
             db.query('REPLACE INTO feeds SET ' + mysql.escape(data), function(error, result) {
                 if (error) {
                     return callback(error);
@@ -118,7 +147,7 @@ module.exports = {
                 data.id = result.insertId;
 
                 // Insert the items
-                sequential(data.id, rss, function(error) {
+                sequential(data.id, items, function(error) {
                     if (error) {
                         return callback(error);
                     }

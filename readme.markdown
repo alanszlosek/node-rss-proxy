@@ -12,7 +12,7 @@ Features:
 Requirements:
 
 * node.js
-* NPM modules: mysql, parse-rss, entities
+* NPM modules: mysql, feedparser, request, entities
 
 Installation and Usage:
 

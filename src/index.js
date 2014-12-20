@@ -1,6 +1,5 @@
 var http = require('http'),
     url = require('url'),
-    parser = require('parse-rss'),
     config = require('../config.js'),
     proxy = require('./proxy.js'),
     mysql = require('mysql'),
@@ -35,9 +34,7 @@ var server = http.createServer(function (req, res) {
                 res.end('404 Not found');
                 return;
             }
-            if (!feed.last_access_timestamp) {
-                feed.last_access_timestamp = 0;
-            }
+            console.log('Last access: ' + feed.last_access_timestamp);
     
             proxy.feedXML(db, feed, feed.last_access_timestamp, function(error, xml) {
                 console.log('Releasing connection');

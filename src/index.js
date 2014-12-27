@@ -15,8 +15,10 @@ var server = http.createServer(function (req, res) {
     }
     var i = req.url.indexOf('/', prefix.length);
     var client = req.url.substring(prefix.length, i);
+    var user_agent = req.headers['user-agent'];
     var feed_url = req.url.substr(i+1);
     console.log('Client and feed: ' + client + ' ' + feed_url);
+    console.log('Request from: ' + req.headers['user-agent']);
 
     dbPool.getConnection(function(error, db) {
         if (error) {
@@ -26,7 +28,7 @@ var server = http.createServer(function (req, res) {
             return;
         }
 
-        proxy.createOrFetch(db, feed_url, client, function(error, feed) {
+        proxy.createOrFetch(db, feed_url, client, user_agent, function(error, feed) {
             if (error) {
                 db.release();
                 console.log(error);

@@ -4,7 +4,7 @@ var request = require('request'),
     x = require('./xml.js');
 
 module.exports = {
-    createOrFetch: function(db, feed_url, client, callback) {
+    createOrFetch: function(db, feed_url, client, user_agent, callback) {
         var self = this;
         var feed;
         // We're going to exclude client access times within the last 10 minutes ...
@@ -19,7 +19,7 @@ module.exports = {
             if (rows.length == 0) {
                 console.log('Have not seen this feed before, fetching+creating anew');
                 // Not found, so create and fetch it
-                self.fetch(db, feed_url, function(error) {
+                self.fetch(db, feed_url, user_agent, function(error) {
                     if (error) {
                         callback(error);
                         return;
@@ -46,7 +46,7 @@ module.exports = {
                 }
                 if (feed.last_fetched_timestamp < ((new Date()).getTime() - 21600000)) {
                     console.log('Have not fetched in a while, refreshing ...');
-                    self.fetch(db, feed_url, function(error, feed) {
+                    self.fetch(db, feed_url, user_agent, function(error, feed) {
                         if (error) {
                             return callback(error);
                         }
@@ -61,13 +61,13 @@ module.exports = {
             }
         });
     },
-    fetch: function(db, feed_url, callback) {
+    fetch: function(db, feed_url, user_agent, callback) {
         var req = request(feed_url, {timeout: 10000, pool: false}),
             feedparser = new FeedParser({addmeta:false}),
             items = [];
         //req.setMaxListeners(50);
         // Some feeds do not respond without user-agent and accept headers.
-        req.setHeader('user-agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1650.63 Safari/537.36');
+        req.setHeader('user-agent', user_agent);
         req.setHeader('accept', 'text/html,application/xhtml+xml');
 
 
@@ -100,9 +100,14 @@ module.exports = {
                 if (!item.enclosures || item.enclosures.length == 0) {
                     return work();
                 }
+                // No guid (maybe feed has moved over the years?)
+                if (!item.guid && !item.link) {
+                    console.log('Skipping ' + item.title);
+                    return work();
+                }
                 data = {
                     feed_id: feed_id,
-                    guid: item.guid,
+                    guid: item.guid || item.link,
                     title: item.title,
                     description: item.description,
                     timestamp: (new Date(item.pubdate)).getTime(),

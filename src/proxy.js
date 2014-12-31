@@ -3,65 +3,58 @@ var request = require('request'),
     mysql = require('mysql'),
     x = require('./xml.js');
 
-module.exports = {
-    createOrFetch: function(db, feed_url, client, user_agent, callback) {
-        var self = this;
-        var feed;
+module.exports = function(db, client, user_agent) {
+    var createOrFetch = function(feed_url, callback) {
         // We're going to exclude client access times within the last 10 minutes ...
         // Repeat accesses probably mean we should return the whole feed,
         // maybe something went screwy and someone's hitting refresh
-        var padding = (new Date()).getTime() - 60000;
-        db.query('SELECT feeds.*,clients.last_access_timestamp FROM feeds LEFT JOIN clients on (feeds.id=clients.feed_id AND clients.name=? AND clients.last_access_timestamp < ?) WHERE feed_url=?', [client, padding, feed_url], function(err, rows) {
+        db.query('SELECT feeds.*,clients.last_access_timestamp FROM feeds LEFT JOIN clients on (feeds.id=clients.feed_id) WHERE clients.name=? AND feeds.feed_url=?', [client, feed_url], function(err, rows) {
+            var feed,
+                fetch = false,
+                now = (new Date()).getTime();
             if (err) {
                 callback(err);
                 return;
             }
-            if (rows.length == 0) {
-                console.log('Have not seen this feed before, fetching+creating anew');
-                // Not found, so create and fetch it
-                self.fetch(db, feed_url, user_agent, function(error) {
-                    if (error) {
-                        callback(error);
-                        return;
-                    }
-
-                    // Try once more
-                    db.query('SELECT * FROM feeds WHERE feed_url=?', [feed_url], function(err, rows) {
-                        if (err) {
-                            callback(err);
-                            return;
-                        }
-                        feed = rows[0];
-                        feed.last_access_timestamp = 0;
-                        self.updateClientAccessTime(db, feed, client);
-                        callback(null, feed);
-                    });
-                });
-            } else {
-                console.log('Familiar with this feed');
-                // Has it been a while? If so, fetch again
+            if (rows.length > 0) {
                 feed = rows[0];
                 if (!feed.last_access_timestamp) {
                     feed.last_access_timestamp = 0;
                 }
-                if (feed.last_fetched_timestamp < ((new Date()).getTime() - 21600000)) {
-                    console.log('Have not fetched in a while, refreshing ...');
-                    self.fetch(db, feed_url, user_agent, function(error, feed) {
-                        if (error) {
-                            return callback(error);
-                        }
-                        self.updateClientAccessTime(db, feed, client);
-                        callback(null, feed);
-                    });
+
+                console.log(feed_url + "\r\n\tFamiliar with this feed\r\n\tLast access: " + feed.last_access_timestamp);
+                // If our client requested the feed less than 60 seconds ago, give him all items
+                if (feed.last_access_timestamp > (now - 60000)) {
+                    console.log(feed_url + "\r\n\tClient seen recently, returning all items");
+                    feed.last_access_timestamp = 0;
+                // Has it been 12 hours since we last fetched the feed?
+                } else if (feed.last_fetched_timestamp < (now - 21600000)) {
+                    console.log(feed_url + "\r\n\tRefreshing feed, returning newest since " + feed.last_access_timestamp);
+                    fetch = true;
                 } else {
-                    console.log('Has not been long enough. Using cached version');
-                    self.updateClientAccessTime(db, feed, client);
-                    callback(null, feed);
+                    console.log(feed_url + "\r\n\tReturning newest items since " + feed.last_access_timestamp);
                 }
+            } else {
+                console.log(feed_url + "\r\n\tHave not seen this feed before, since " + feed.last_access_timestamp);
+                fetch = true;
+            }
+
+            if (fetch) {
+                fetchAndSave(feed_url, function(error, feed) {
+                    if (error) {
+                        callback(error);
+                        return;
+                    }
+                    updateClientAccessTime(feed);
+                    callback(null, feed);
+                });
+            } else {
+                updateClientAccessTime(feed);
+                callback(null, feed);
             }
         });
-    },
-    fetch: function(db, feed_url, user_agent, callback) {
+    };
+    var fetchAndSave = function(feed_url, callback) {
         var req = request(feed_url, {timeout: 10000, pool: false}),
             feedparser = new FeedParser({addmeta:false}),
             items = [];
@@ -70,9 +63,6 @@ module.exports = {
         req.setHeader('user-agent', user_agent);
         req.setHeader('accept', 'text/html,application/xhtml+xml');
 
-
-        // Define our handlers
-        req.on('error', callback);
         req.on('response', function(res) {
             var bytes = 0;
             if (res.statusCode != 200) {
@@ -82,12 +72,13 @@ module.exports = {
                 bytes += data.length;
             });
             res.on('end', function() {
-                console.log('Feed size in bytes: ' + bytes);
+                console.log(feed_url + "\r\n\tFeed size in bytes: " + bytes);
             });
             res.pipe(feedparser);
             // Can we get content length from res?
         });
 
+        // This helps us sequentially insert feed items into the database
         var sequential = function(feed_id, rows, callback) {
             var work = function() {
                 var item,
@@ -144,7 +135,7 @@ module.exports = {
                     last_updated_timestamp: (new Date(this.meta.date)).getTime()
                 };
 
-            console.log('Feed has ' + items.length + ' items');
+            console.log(feed_url + "\r\n\tFeed has " + items.length + ' items');
             db.query('REPLACE INTO feeds SET ' + mysql.escape(data), function(error, result) {
                 if (error) {
                     return callback(error);
@@ -160,10 +151,10 @@ module.exports = {
                 });
             });
         });
-    },
+    };
 
-    feedXML: function(db, feed, since, callback) {
-        db.query('SELECT * FROM items WHERE feed_id=? AND `timestamp`>? ORDER BY `timestamp` DESC', [feed.id, since], function(err, rows) {
+    var feedXML = function(feed, callback) {
+        db.query('SELECT * FROM items WHERE feed_id=? AND `timestamp`>? ORDER BY `timestamp` DESC', [feed.id, feed.last_access_timestamp], function(err, rows) {
             if (err) {
                 callback(err);
                 return;
@@ -182,7 +173,7 @@ module.exports = {
                 var date = new Date(row.timestamp);
                 channel.child(
                     x('item',
-                        x('guid', row.guid),
+                       x('guid', row.guid),
                         x('pubDate', date.toUTCString()),
                         x('title').cdata(row.title),
                         x('description').cdata(row.description),
@@ -192,20 +183,39 @@ module.exports = {
                 );
             }
             xml = channel.toString('rss');
-            console.log('Output XML size: ' + xml.length);
             callback(false, xml);
         });
-    },
+    };
 
-    updateClientAccessTime: function(db, feed, client) {
+    var updateClientAccessTime = function(feed) {
         // Update access time
         var data = {
             name: client,
             feed_id: feed.id,
             last_access_timestamp: (new Date()).getTime()
         };
+        console.log(feed.feed_url + "\r\n\tUpdating client access to " + data.last_access_timestamp);
         db.query('REPLACE INTO clients SET ' + mysql.escape(data));
-    }
+    };
+
+    return {
+        fetch: function(feed_url, callback) {
+            createOrFetch(feed_url, function(error, feed) {
+                if (error) {
+                    callback(error);
+                    return;
+                }
+                feedXML(feed, function(error, xml) {
+                    if (error) {
+                        callback(error);
+                        return;
+                    }
+                    console.log(feed_url + "\r\n\tOutput XML size: " + xml.length);
+                    callback(null, xml);
+                });
+            });
+        }
+    };
 
 };
 

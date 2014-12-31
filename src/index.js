@@ -1,7 +1,7 @@
 var http = require('http'),
     url = require('url'),
     config = require('../config.js'),
-    proxy = require('./proxy.js'),
+    Proxy = require('./proxy.js'),
     mysql = require('mysql'),
     dbPool = mysql.createPool(config.db);
 
@@ -27,29 +27,20 @@ var server = http.createServer(function (req, res) {
             res.end('500 DB error');
             return;
         }
-
-        proxy.createOrFetch(db, feed_url, client, user_agent, function(error, feed) {
+        var proxy = new Proxy(db, client, user_agent);
+        proxy.fetch(feed_url, function(error, xml) {
+            db.release();
             if (error) {
-                db.release();
                 console.log(error);
                 res.writeHead(404, { 'Content-Type': 'text/html' })
                 res.end('404 Not found');
                 return;
             }
-            console.log('Last access: ' + feed.last_access_timestamp);
+            //console.log('Last access: ' + feed.last_access_timestamp);
     
-            proxy.feedXML(db, feed, feed.last_access_timestamp, function(error, xml) {
-                console.log('Releasing connection');
-                db.release();
-                if (error) {
-                    console.log(error);
-                    res.writeHead(404, { 'Content-Type': 'text/html' })
-                    res.end('404 Not found');
-                    return;
-                }
-                res.writeHead(200, { 'Content-Type': 'application/rss+xml' });
-                res.end(xml);
-            });
+            //proxy.feedXML(db, feed, feed.last_access_timestamp, function(error, xml) {
+            res.writeHead(200, { 'Content-Type': 'application/rss+xml' });
+            res.end(xml);
         });
     });
 });

@@ -1,7 +1,8 @@
 var request = require('request'),
     FeedParser = require('feedparser'),
     mysql = require('mysql'),
-    x = require('./xml.js');
+    x = require('./xml.js'),
+    debug = require('debug')('proxy.js');
 
 module.exports = function(db, client, user_agent) {
     var createOrFetch = function(feed_url, callback) {
@@ -22,20 +23,20 @@ module.exports = function(db, client, user_agent) {
                     feed.last_access_timestamp = 0;
                 }
 
-                console.log(feed_url + "\r\n\tFamiliar with this feed\r\n\tLast access: " + feed.last_access_timestamp);
+                debug(feed_url + "\r\n\tFamiliar with this feed\r\n\tLast access: " + feed.last_access_timestamp);
                 // If our client requested the feed less than 60 seconds ago, give him all items
                 if (feed.last_access_timestamp > (now - 60000)) {
-                    console.log(feed_url + "\r\n\tClient seen recently, returning all items");
+                    debug(feed_url + "\r\n\tClient seen recently, returning all items");
                     feed.last_access_timestamp = 0;
                 // Has it been 12 hours since we last fetched the feed?
                 } else if (feed.last_fetched_timestamp < (now - 21600000)) {
-                    console.log(feed_url + "\r\n\tRefreshing feed, returning newest since " + feed.last_access_timestamp);
+                    debug(feed_url + "\r\n\tRefreshing feed, returning newest since " + feed.last_access_timestamp);
                     fetch = true;
                 } else {
-                    console.log(feed_url + "\r\n\tReturning newest items since " + feed.last_access_timestamp);
+                    debug(feed_url + "\r\n\tReturning newest items since " + feed.last_access_timestamp);
                 }
             } else {
-                console.log(feed_url + "\r\n\tHave not seen this feed before, since " + feed.last_access_timestamp);
+                debug(feed_url + "\r\n\tHave not seen this feed before, since " + feed.last_access_timestamp);
                 fetch = true;
             }
 
@@ -72,7 +73,7 @@ module.exports = function(db, client, user_agent) {
                 bytes += data.length;
             });
             res.on('end', function() {
-                console.log(feed_url + "\r\n\tFeed size in bytes: " + bytes);
+                debug(feed_url + "\r\n\tFeed size in bytes: " + bytes);
             });
             res.pipe(feedparser);
             // Can we get content length from res?
@@ -93,7 +94,7 @@ module.exports = function(db, client, user_agent) {
                 }
                 // No guid (maybe feed has moved over the years?)
                 if (!item.guid && !item.link) {
-                    console.log('Skipping ' + item.title);
+                    debug('Skipping ' + item.title);
                     return work();
                 }
                 data = {
@@ -135,7 +136,7 @@ module.exports = function(db, client, user_agent) {
                     last_updated_timestamp: (new Date(this.meta.date)).getTime()
                 };
 
-            console.log(feed_url + "\r\n\tFeed has " + items.length + ' items');
+            debug(feed_url + "\r\n\tFeed has " + items.length + ' items');
             db.query('REPLACE INTO feeds SET ' + mysql.escape(data), function(error, result) {
                 if (error) {
                     return callback(error);
@@ -194,7 +195,7 @@ module.exports = function(db, client, user_agent) {
             feed_id: feed.id,
             last_access_timestamp: (new Date()).getTime()
         };
-        console.log(feed.feed_url + "\r\n\tUpdating client access to " + data.last_access_timestamp);
+        debug(feed.feed_url + "\r\n\tUpdating client access to " + data.last_access_timestamp);
         db.query('REPLACE INTO clients SET ' + mysql.escape(data));
     };
 
@@ -210,7 +211,7 @@ module.exports = function(db, client, user_agent) {
                         callback(error);
                         return;
                     }
-                    console.log(feed_url + "\r\n\tOutput XML size: " + xml.length);
+                    debug(feed_url + "\r\n\tOutput XML size: " + xml.length);
                     callback(null, xml);
                 });
             });

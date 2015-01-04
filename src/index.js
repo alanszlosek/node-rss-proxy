@@ -3,12 +3,13 @@ var http = require('http'),
     config = require('../config.js'),
     Proxy = require('./proxy.js'),
     mysql = require('mysql'),
-    dbPool = mysql.createPool(config.db);
+    dbPool = mysql.createPool(config.db),
+    debug = require('debug')('index.js');
 
 var server = http.createServer(function (req, res) {
     var prefix = '/' + config.secret + '-';
     if (req.url.substr(0, prefix.length) != prefix) {
-        console.log('Bad request: ' + req.url);
+        debug('Bad request: ' + req.url);
         res.writeHead(404, { 'Content-Type': 'text/html' })
         res.end('404 Not found');
         return;
@@ -17,12 +18,12 @@ var server = http.createServer(function (req, res) {
     var client = req.url.substring(prefix.length, i);
     var user_agent = req.headers['user-agent'];
     var feed_url = req.url.substr(i+1);
-    console.log('Client and feed: ' + client + ' ' + feed_url);
-    console.log('Request from: ' + req.headers['user-agent']);
+    debug('Client and feed: ' + client + ' ' + feed_url);
+    debug('Request from: ' + req.headers['user-agent']);
 
     dbPool.getConnection(function(error, db) {
         if (error) {
-            console.log('Error getting connection from pool: ' + error);
+            debug('Error getting connection from pool: ' + error);
             res.writeHead(500, { 'Content-Type': 'text/html' })
             res.end('500 DB error');
             return;
@@ -31,7 +32,7 @@ var server = http.createServer(function (req, res) {
         proxy.fetch(feed_url, function(error, xml) {
             db.release();
             if (error) {
-                console.log(error);
+                debug(error);
                 res.writeHead(404, { 'Content-Type': 'text/html' })
                 res.end('404 Not found');
                 return;

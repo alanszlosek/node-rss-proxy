@@ -1,14 +1,14 @@
 DROP TABLE IF EXISTS `clients`;
 CREATE TABLE `clients` (
   `name` varchar(10) NOT NULL,
-  `feed_id` int(11) NOT NULL,
+  `feed_id` char(32) NOT NULL,
   `last_access_timestamp` bigint(20) NOT NULL DEFAULT '0',
   UNIQUE KEY `client` (`feed_id`,`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 DROP TABLE IF EXISTS `feeds`;
 CREATE TABLE `feeds` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` char(32) NOT NULL,
   `title` varchar(255) DEFAULT NULL,
   `website` varchar(255) DEFAULT NULL,
   `feed_url` varchar(255) DEFAULT NULL,

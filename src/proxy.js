@@ -2,15 +2,16 @@ var request = require('request'),
     FeedParser = require('feedparser'),
     mysql = require('mysql'),
     x = require('./xml.js'),
-    debug = require('debug')('proxy.js');
+    debug = require('debug')('proxy.js'),
+    crypto = require('crypto');
 
 module.exports = function(db, client, user_agent) {
-    var createOrFetch = function(feed_url, callback) {
+    var createOrFetch = function(feed_id, feed_url, callback) {
         // We're going to exclude client access times within the last 10 minutes ...
         // Repeat accesses probably mean we should return the whole feed,
         // maybe something went screwy and someone's hitting refresh
-        db.query('SELECT feeds.*,clients.last_access_timestamp FROM feeds LEFT JOIN clients on (feeds.id=clients.feed_id) WHERE clients.name=? AND feeds.feed_url=?', [client, feed_url], function(err, rows) {
-            var feed,
+        db.query('SELECT feeds.*,clients.last_access_timestamp FROM feeds LEFT JOIN clients on (feeds.id=clients.feed_id AND clients.name=?) WHERE feeds.id=?', [client, feed_id], function(err, rows) {
+            var feed = null,
                 fetch = false,
                 now = (new Date()).getTime();
             if (err) {
@@ -28,20 +29,24 @@ module.exports = function(db, client, user_agent) {
                 if (feed.last_access_timestamp > (now - 60000)) {
                     debug(feed_url + "\r\n\tClient seen recently, returning all items");
                     feed.last_access_timestamp = 0;
-                // Has it been 12 hours since we last fetched the feed?
+                // Has it been 6 hours since we last fetched the feed?
                 } else if (feed.last_fetched_timestamp < (now - 21600000)) {
                     debug(feed_url + "\r\n\tRefreshing feed, returning newest since " + feed.last_access_timestamp);
                     fetch = true;
+                    // Client might have requested feed a few minutes ago,
+                    // but since the feed is being refreshed, give them everything
+                    // since last refresh
+                    feed.last_access_timestamp = feed.last_fetched_timestamp;
                 } else {
                     debug(feed_url + "\r\n\tReturning newest items since " + feed.last_access_timestamp);
                 }
             } else {
-                debug(feed_url + "\r\n\tHave not seen this feed before, since " + feed.last_access_timestamp);
+                debug(feed_url + "\r\n\tHave not seen this feed before");
                 fetch = true;
             }
 
             if (fetch) {
-                fetchAndSave(feed_url, function(error, feed) {
+                fetchAndSave(feed_id, feed_url, function(error, feed) {
                     if (error) {
                         callback(error);
                         return;
@@ -55,7 +60,7 @@ module.exports = function(db, client, user_agent) {
             }
         });
     };
-    var fetchAndSave = function(feed_url, callback) {
+    var fetchAndSave = function(feed_id, feed_url, callback) {
         var req = request(feed_url, {timeout: 10000, pool: false}),
             feedparser = new FeedParser({addmeta:false}),
             items = [];
@@ -80,7 +85,7 @@ module.exports = function(db, client, user_agent) {
         });
 
         // This helps us sequentially insert feed items into the database
-        var sequential = function(feed_id, rows, callback) {
+        var sequential = function(rows, callback) {
             var work = function() {
                 var item,
                     data;
@@ -127,6 +132,7 @@ module.exports = function(db, client, user_agent) {
         });
         feedparser.on('end', function() {
             var data = {
+                    id: feed_id,
                     feed_url: feed_url,
                     title: this.meta.title,
                     website: this.meta.link,
@@ -141,10 +147,9 @@ module.exports = function(db, client, user_agent) {
                 if (error) {
                     return callback(error);
                 }
-                data.id = result.insertId;
 
                 // Insert the items
-                sequential(data.id, items, function(error) {
+                sequential(items, function(error) {
                     if (error) {
                         return callback(error);
                     }
@@ -201,7 +206,10 @@ module.exports = function(db, client, user_agent) {
 
     return {
         fetch: function(feed_url, callback) {
-            createOrFetch(feed_url, function(error, feed) {
+            var md5 = crypto.createHash('md5');
+            // Calculate id for the feed, md5 of the url
+            md5.update(feed_url.toLowerCase());
+            createOrFetch(md5.digest('hex'), feed_url, function(error, feed) {
                 if (error) {
                     callback(error);
                     return;

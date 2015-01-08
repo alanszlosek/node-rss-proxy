@@ -25,18 +25,18 @@ module.exports = function(db, client, user_agent) {
                 }
 
                 debug(feed_url + "\r\n\tFamiliar with this feed\r\n\tLast access: " + feed.last_access_timestamp);
-                // If our client requested the feed less than 60 seconds ago, give him all items
-                if (feed.last_access_timestamp > (now - 60000)) {
-                    debug(feed_url + "\r\n\tClient seen recently, returning all items");
-                    feed.last_access_timestamp = 0;
                 // Has it been 6 hours since we last fetched the feed?
-                } else if (feed.last_fetched_timestamp < (now - 21600000)) {
+                if (feed.last_fetched_timestamp < (now - 21600000)) {
                     debug(feed_url + "\r\n\tRefreshing feed, returning newest since " + feed.last_access_timestamp);
                     fetch = true;
                     // Client might have requested feed a few minutes ago,
                     // but since the feed is being refreshed, give them everything
                     // since last refresh
                     feed.last_access_timestamp = feed.last_fetched_timestamp;
+                // If our client requested the feed less than 60 seconds ago, give him all items
+                } else if (feed.last_access_timestamp > (now - 60000)) {
+                    debug(feed_url + "\r\n\tClient seen recently, returning all items");
+                    feed.last_access_timestamp = 0;
                 } else {
                     debug(feed_url + "\r\n\tReturning newest items since " + feed.last_access_timestamp);
                 }
@@ -51,11 +51,9 @@ module.exports = function(db, client, user_agent) {
                         callback(error);
                         return;
                     }
-                    updateClientAccessTime(feed);
                     callback(null, feed);
                 });
             } else {
-                updateClientAccessTime(feed);
                 callback(null, feed);
             }
         });
@@ -87,33 +85,51 @@ module.exports = function(db, client, user_agent) {
         // This helps us sequentially insert feed items into the database
         var sequential = function(rows, callback) {
             var work = function() {
-                var item,
-                    data;
+                var items = [],
+                    item,
+                    sql,
+                    data = [],
+                    num_rows = 0,
+                    started;
                 if (rows.length == 0) {
                     return callback(null);
                 }
-                item = rows.pop();
-                // No audio file, skip it
-                if (!item.enclosures || item.enclosures.length == 0) {
-                    return work();
+                
+                // Insert 5 at a time
+                items = rows.splice(0, 5);
+                sql = 'REPLACE INTO items (feed_id,guid,title,description,timestamp,item_url,audio_url,audio_mimetype,audio_length) VALUES (?,?,?,?,?,?,?,?,?),(?,?,?,?,?,?,?,?,?),(?,?,?,?,?,?,?,?,?),(?,?,?,?,?,?,?,?,?),(?,?,?,?,?,?,?,?,?)';
+                for (var i = 0; i < items.length; i++) {
+                    item = items[i];
+
+                    // No audio file, skip it
+                    if (!item.enclosures || item.enclosures.length == 0) {
+                        continue;
+                    }
+                    // No guid (maybe feed has moved over the years?)
+                    if (!item.guid && !item.link) {
+                        debug('Skipping ' + item.title);
+                        continue;
+                    }
+                    data.splice(-1, 0, 
+                        feed_id, // feed_id
+                        item.guid || item.link, // guid
+                        item.title,
+                        item.description, // description
+                        (new Date(item.pubdate)).getTime(), // timestamp
+                        item.link, // item_url
+                        item.enclosures[0].url, // audio_url
+                        item.enclosures[0].type, // audio_mimetype
+                        item.enclosures[0]['length'] || 0 // audio_length
+                    );
+                    num_rows++;
                 }
-                // No guid (maybe feed has moved over the years?)
-                if (!item.guid && !item.link) {
-                    debug('Skipping ' + item.title);
+                if (num_rows == 0) {
                     return work();
+                } else if (num_rows < 5) {
+                    // Remove excess placeholders ... 20 characters worth for each row
+                    sql = sql.slice(0, (-20 * (5 - num_rows)));
                 }
-                data = {
-                    feed_id: feed_id,
-                    guid: item.guid || item.link,
-                    title: item.title,
-                    description: item.description,
-                    timestamp: (new Date(item.pubdate)).getTime(),
-                    item_url: item.link,
-                    audio_url: item.enclosures[0].url,
-                    audio_mimetype: item.enclosures[0].type,
-                    audio_length: item.enclosures[0]['length'] || 0
-                };
-                db.query('REPLACE INTO items SET ' + mysql.escape(data), function(error, result) {
+                db.query(sql, data, function(error, result) {
                     if (error) {
                         return callback(error);
                     }
@@ -219,6 +235,7 @@ module.exports = function(db, client, user_agent) {
                         callback(error);
                         return;
                     }
+                    updateClientAccessTime(feed);
                     debug(feed_url + "\r\n\tOutput XML size: " + xml.length);
                     callback(null, xml);
                 });

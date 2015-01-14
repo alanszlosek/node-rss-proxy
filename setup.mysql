@@ -15,7 +15,6 @@ CREATE TABLE `feeds` (
   `description` mediumtext,
   `author` varchar(255) DEFAULT NULL,
   `feed_image_url` varchar(255) NOT NULL DEFAULT '',
-  `last_updated_timestamp` bigint(20) NOT NULL DEFAULT '0',
   `last_fetched_timestamp` bigint(20) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `feed_url` (`feed_url`)

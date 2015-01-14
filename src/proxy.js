@@ -174,12 +174,8 @@ module.exports = function(db, client, user_agent) {
                     website: this.meta.link,
                     description: this.meta.description,
                     feed_image_url: this.meta.image.url,
-                    last_fetched_timestamp: request_timestamp, // from above, top of module.exports
-                    last_updated_timestamp: Date.parse(this.meta.date)
+                    last_fetched_timestamp: request_timestamp
                 };
-            if (data.last_updated_timestamp == 0) {
-                // Failed to parse data, oh shit
-            }
 
             debug(feed_url + "\r\n\tFeed has " + items.length + ' items');
             if (items.length == 0) {

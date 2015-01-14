@@ -18,7 +18,7 @@ var server = http.createServer(function (req, res) {
     var client = req.url.substring(prefix.length, i);
     var user_agent = req.headers['user-agent'];
     var feed_url = req.url.substr(i+1);
-    debug('Client and feed: ' + client + ' ' + feed_url);
+    debug('Client and feed: ' + client + ' ' + feed_url + "\r\n\t" + (new Date()).toLocaleString());
     debug('Request from: ' + req.headers['user-agent']);
 
     dbPool.getConnection(function(error, db) {

@@ -25,7 +25,12 @@ module.exports = function() {
             xml += '<' + tag;
             for (var i in self._attributes) {
                 if (self._attributes.hasOwnProperty(i)) {
-                    xml += ' ' + i + '="' + entities.encodeXML(self._attributes[i]) + '"';
+                    try {
+                        xml += ' ' + i + '="' + entities.encodeXML(self._attributes[i]) + '"';
+                    } catch (e) {
+                        console.log('Encoding ' + self._attributes[i] + ': ' + e);
+                        return '';
+                    }
                 }
             }
             if (self._cdata) {

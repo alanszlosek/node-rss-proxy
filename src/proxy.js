@@ -60,6 +60,9 @@ module.exports = function(db, client, user_agent) {
             } else {
                 debug(feed_url + "\r\n\tHave not seen this feed before");
                 fetch = true;
+                feed = {
+                    last_access_timestamp: 0
+                };
             }
 
             if (fetch) {
@@ -173,7 +176,7 @@ module.exports = function(db, client, user_agent) {
                     title: this.meta.title,
                     website: this.meta.link,
                     description: this.meta.description,
-                    feed_image_url: this.meta.image.url,
+                    feed_image_url: (this.meta.image ? this.meta.image.url : ''),
                     last_fetched_timestamp: request_timestamp
                 };
 
@@ -204,13 +207,14 @@ module.exports = function(db, client, user_agent) {
                 callback(err);
                 return;
             }
+            // TODO: make sure we don't assign null when building up XML. fallback to empty string or entity conversion will bomb
             var channel = x('channel',
                 x('title').cdata(feed.title),
                 x('link', feed.feed_url),
                 x('image',
                     x('url', feed.feed_image_url)
                 ),
-                x('itunes:image').attribute('href', feed.feed_image_url)
+                x('itunes:image').attribute('href', feed.feed_image_url || '')
             );
             var xml;
             for (var i = 0; i < rows.length; i++) {

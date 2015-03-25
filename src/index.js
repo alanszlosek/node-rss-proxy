@@ -30,7 +30,11 @@ var server = http.createServer(function (req, res) {
         }
         var proxy = new Proxy(db, client, user_agent);
         proxy.fetch(feed_url, function(error, xml) {
-            db.release();
+            try {
+                db.release();
+            } catch (e) {
+                debug('Exeption while trying to release DB connection: ' + e);
+            }
             if (error) {
                 debug(error);
                 res.writeHead(404, { 'Content-Type': 'text/html' })

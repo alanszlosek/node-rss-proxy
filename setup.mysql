@@ -1,14 +1,21 @@
+DROP TABLE IF EXISTS `feed_ids`;
+CREATE TABLE `feed_ids` (
+  `url` varchar(255) NOT NULL PRIMARY KEY,
+  `id` bigint(20) unsigned NOT NULL,
+  `timestamp` bigint(20) unsigned NOT NULL DEFAULT '0'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
 DROP TABLE IF EXISTS `clients`;
 CREATE TABLE `clients` (
   `name` varchar(10) NOT NULL,
-  `feed_id` char(32) NOT NULL,
-  `last_access_timestamp` bigint(20) NOT NULL DEFAULT '0',
+  `feed_id` bigint(20) unsigned NOT NULL,
+  `last_access_timestamp` bigint(20) unsigned NOT NULL DEFAULT '0',
   UNIQUE KEY `client` (`feed_id`,`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 DROP TABLE IF EXISTS `feeds`;
 CREATE TABLE `feeds` (
-  `id` char(32) NOT NULL,
+  `id` bigint(20) unsigned NOT NULL,
   `title` varchar(255) DEFAULT NULL,
   `website` varchar(255) DEFAULT NULL,
   `feed_url` varchar(255) DEFAULT NULL,
@@ -16,13 +23,16 @@ CREATE TABLE `feeds` (
   `author` varchar(255) DEFAULT NULL,
   `feed_image_url` varchar(255) NOT NULL DEFAULT '',
   `last_fetched_timestamp` bigint(20) NOT NULL DEFAULT '0',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `feed_url` (`feed_url`)
-) ENGINE=InnoDB AUTO_INCREMENT=41 DEFAULT CHARSET=utf8;
+  -- 0: disabled, for when you want to keep back episodes in your player, but you know no new items will be added
+  -- 1: enabled
+  `status` tinyint(3) unsigned NOT NULL DEFAULT 1,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 DROP TABLE IF EXISTS `items`;
 CREATE TABLE `items` (
-  `feed_id` int(11) NOT NULL,
+  `feed_id` bigint(20) unsigned NOT NULL,
+  `id` bigint(20) unsigned NOT NULL,
   `guid` varchar(255) NOT NULL,
   `timestamp` bigint(20) unsigned NOT NULL,
   `title` varchar(255) DEFAULT NULL,
@@ -30,8 +40,8 @@ CREATE TABLE `items` (
   `description` text,
   `audio_url` varchar(255) DEFAULT NULL,
   `audio_mimetype` varchar(255) DEFAULT NULL,
-  `audio_length` int(11) NOT NULL,
-  PRIMARY KEY (`guid`),
+  `audio_length` int(11) unsigned NOT NULL,
+  UNIQUE KEY id (`feed_id`, `id`),
   KEY `item_timestamp` (`timestamp`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 

@@ -1,0 +1,12 @@
+[Unit]
+Description=node.js RSS proxy service
+After=network.target
+
+[Service]
+User=alan
+Group=alan
+WorkingDirectory=/home/alan/projects/node-rss-proxy
+#Environment=DEBUG=*
+SyslogIdentifier=node-rss-proxy
+ExecStart=/usr/bin/node src/index.js 10000
+Restart=always

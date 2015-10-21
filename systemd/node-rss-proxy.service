@@ -10,3 +10,6 @@ WorkingDirectory=/home/alan/projects/node-rss-proxy
 SyslogIdentifier=node-rss-proxy
 ExecStart=/usr/bin/node src/index.js 10000
 Restart=always
+
+[Install]
+WantedBy=multi-user.target

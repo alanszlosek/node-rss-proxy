@@ -13,6 +13,11 @@ var server = http.createServer(function (req, res) {
     var start_milliseconds = Date.now();
     var milliseconds;
 
+    if (req.url == '/') {
+        res.end('hi');
+        return;
+    }
+
     statsd.count('node-rss-proxy.requests.any', 1);
     if (req.url.substr(0, prefix.length) != prefix) {
         debug.error('Bad request: ' + req.url);
@@ -25,11 +30,20 @@ var server = http.createServer(function (req, res) {
         statsd.timing('node-rss-proxy.requests.404', milliseconds);
         return;
     }
-    var i = req.url.indexOf('/', prefix.length);
-    var client = req.url.substring(prefix.length, i);
-    var feed_url = req.url.substr(i+1);
+    var slashAfterSecretFolder = req.url.indexOf('/', prefix.length);
+    var client = req.url.substring(prefix.length, slashAfterSecretFolder);
+    var feed_url = req.url.substr(slashAfterSecretFolder + 1).replace('://', '/');
+    if (feed_url.substr(0, 5) == 'https') {
+        feed_url = 'https:/' + feed_url.substr(5);
+    } else if (feed_url.substr(0, 4) == 'http') {
+        feed_url = 'http:/' + feed_url.substr(4);
+    }
+
+    // trim and die if feed_url is empty
     debug.log('Client and feed: ' + client + ' ' + feed_url);
     debug.log('Request from: ' + req.headers['user-agent']);
+    // Parser gets confused by this
+    debug.log('Request host: ' + req.headers.host);
 
     dbPool.getConnection(function(error, db) {
         if (error) {
@@ -74,5 +88,5 @@ var server = http.createServer(function (req, res) {
     });
 });
 
-server.listen(Number(process.argv[2]));
+server.listen(Number(process.argv[2]), '127.0.0.1');
 

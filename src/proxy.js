@@ -34,10 +34,9 @@ module.exports = function(db, client, user_agent) {
         });
     };
 
-    var createOrFetch = function(feed_id, callback) {
+    var createOrFetch = function(feed_id, feed_url, callback) {
         db.query('SELECT feeds.*,clients.last_access_timestamp FROM feeds LEFT JOIN clients on (feeds.id=clients.feed_id AND clients.name=?) WHERE feeds.id=?', [client, feed_id], function(err, rows) {
             var feed = null,
-                feed_url,
                 fetch = false;
             if (err) {
                 callback(err);
@@ -300,7 +299,7 @@ module.exports = function(db, client, user_agent) {
                     callback(error);
                     return;
                 }
-                createOrFetch(feed_id, function(error, feed, last_access_timestamp) {
+                createOrFetch(feed_id, feed_url, function(error, feed, last_access_timestamp) {
                     if (error) {
                         callback(error);
                         return;

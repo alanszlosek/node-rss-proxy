@@ -1,15 +1,14 @@
 Node RSS Proxy
 ----
 
-Node RSS Proxy is a node.js service I use to proxy and cache podcast RSS feeds.
+Node RSS Proxy is a node.js service I use on my linode server to proxy and cache podcast RSS feeds.
 
-Features:
+*Why?* To reduce mobile data usage, and so my phone can process RSS feeds more quickly.
 
-* Reduces size of a podcast feed by omitting unnecessary XML elements
+* The proxy reduces the size of a podcast feed by omitting unnecessary XML elements
 * Reduces the number of servers my phone has to contact when fetching feeds
 * Returns only the new feed items (since podcast client's last fetch)
 * Follows feed redirects, and remembers previous URLs
-* systemd service definition, if you need it
 
 Requirements:
 
@@ -28,3 +27,14 @@ Installation and Usage:
   * FOLDERSECRET is a secret folder prefix of your choosing, to keep others from using your proxy
   * CLIENTNAME is to differentiate devices/podcast-clients
 
+Note about Caddy HTTP server:
+
+Caddy convert an invalid URL info a valid one, which caused problems for the proxy. Caddy will convert this:
+
+    http://feed-proxy.com/secret-device/http://feed-url.com/123
+
+into this:
+
+    http://feed-proxy.com/secret-device/http/feed-url.com/123
+
+To accomodate that, I've modified src/index.js to expand "http/" into "http://" as appropriate.

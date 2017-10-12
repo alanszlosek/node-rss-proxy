@@ -191,12 +191,20 @@ module.exports = function(db, client, user_agent) {
 
         // This helps us sequentially insert feed items into the database
         var sequential = function(rows, callback) {
+            var getAudioEnclosure = function(item) {
+                for (var i = 0; i < item.enclosures.length; i++) {
+                    if (item.enclosures[i].type == 'audio/mpeg' || item.enclosures[i].type == 'audio/mp3' || item.enclosures[i].type == 'audio/ogg') {
+                        return item.enclosures[i];
+                    }
+                }
+            };
             var work = function() {
                 var items = [],
                     item,
                     sql,
                     data = [],
-                    timestamp;
+                    timestamp,
+                    enclosure;
                 if (rows.length == 0) {
                     return callback(null);
                 }
@@ -217,6 +225,7 @@ module.exports = function(db, client, user_agent) {
                         continue;
                     }
                     timestamp = item.pubdate.valueOf();
+                    enclosure = getAudioEnclosure(item);
                     data.push([
                         feed_id, // feed_id
                         timestamp, // use timestamp for the id
@@ -226,9 +235,9 @@ module.exports = function(db, client, user_agent) {
                         // what if date parsing fails?
                         timestamp, // timestamp
                         item.link, // item_url
-                        item.enclosures[0].url, // audio_url
-                        item.enclosures[0].type, // audio_mimetype
-                        item.enclosures[0]['length'] || 0 // audio_length
+                        enclosure.url, // audio_url
+                        enclosure.type, // audio_mimetype
+                        enclosure['length'] || 0 // audio_length
                     ]);
                 }
                 if (data.length == 0) {

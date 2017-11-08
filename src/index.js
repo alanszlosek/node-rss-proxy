@@ -32,7 +32,8 @@ var server = http.createServer(function (req, res) {
     }
     var slashAfterSecretFolder = req.url.indexOf('/', prefix.length);
     var client = req.url.substring(prefix.length, slashAfterSecretFolder);
-    var feed_url = req.url.substr(slashAfterSecretFolder + 1).replace('://', '/');
+    // Caddy collapses forward slashes, so last replace is to clean up "http:/domain.com"
+    var feed_url = req.url.substr(slashAfterSecretFolder + 1).replace('://', '/').replace(':/', '/');
     if (feed_url.substr(0, 5) == 'https') {
         feed_url = 'https:/' + feed_url.substr(5);
     } else if (feed_url.substr(0, 4) == 'http') {

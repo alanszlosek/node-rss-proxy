@@ -114,7 +114,7 @@ module.exports = function(db, client, user_agent) {
         //req.setMaxListeners(50);
         // Some feeds do not respond without user-agent and accept headers.
         req.setHeader('user-agent', user_agent);
-        req.setHeader('accept', 'text/html,application/xhtml+xml');
+        req.setHeader('accept', 'text/html,application/xhtml+xml,application/xml');
 
         req.on('response', function(res) {
             var feedparser,
@@ -216,7 +216,7 @@ module.exports = function(db, client, user_agent) {
                     item = items[i];
 
                     // No audio file, skip it
-                    if (!item.enclosures || item.enclosures.length == 0) {
+                    if (!('enclosures' in item) || item.enclosures.length == 0) {
                         continue;
                     }
                     // No guid (maybe feed has moved over the years?)
@@ -226,6 +226,10 @@ module.exports = function(db, client, user_agent) {
                     }
                     timestamp = item.pubdate.valueOf();
                     enclosure = getAudioEnclosure(item);
+                    if (!enclosure) {
+                        debug.error('Failed to extract enclosures from ' + item.title + ' on feed ' + feed_id);
+                        continue;
+                    }
                     data.push([
                         feed_id, // feed_id
                         timestamp, // use timestamp for the id

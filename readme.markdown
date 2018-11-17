@@ -17,7 +17,8 @@ Requirements:
 
 Installation and Usage:
 
-* npm install mysql feedparser request entities
+* npm install
+* Installs mysql feedparser request entities node-statsd-client
 * Create a mysql database
 * Use setup.mysql to create tables
 * Copy config-example.js to config.js and update with your database credentials and desired secret folder prefix
